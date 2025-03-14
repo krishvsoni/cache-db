@@ -1,0 +1,12 @@
+version: '3'
+services:
+  cache-db:
+    build:
+      context: .
+      dockerfile: docker.sample
+    ports:
+      - "3000:3000"  
+    volumes:
+      - .:/app        
+    environment:
+      - ENV_VAR=value
