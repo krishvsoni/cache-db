@@ -1,0 +1,25 @@
+FROM ubuntu:20.04
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    g++ \
+    cmake \
+    git \
+    clang \
+    make \
+    libboost-all-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /app
+
+RUN mkdir -p /app/build
+WORKDIR /app/build
+
+RUN cmake ..
+
+RUN make
+
+CMD ["./Release/cache_db"]
