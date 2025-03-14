@@ -39,6 +39,9 @@ const server = http.createServer((req, res) => {
     const parsedUrl = new URL(url, `http://${req.headers.host}`);
     const pathname = parsedUrl.pathname.split('/').filter(Boolean);
 
+    logger.info(`Request URL: ${url}`);
+    logger.info(`Parsed pathname: ${pathname}`);
+
     if (pathname.length < 1) {
         res.statusCode = 400;
         res.setHeader('Content-Type', 'application/json');
@@ -48,31 +51,35 @@ const server = http.createServer((req, res) => {
     const dbName = pathname[0];
     const action = pathname[1];
 
-    if (action === 'set' && method === 'GET') {
-        const urlParams = new URLSearchParams(parsedUrl.search);
-        const key = urlParams.get('key');
-        const value = urlParams.get('value');
-        const ttl = parseInt(urlParams.get('ttl'), 10);
+    if (action === 'set' && method === 'POST') {
+        let body = '';
 
-        if (key && value && ttl) {
+        req.on('data', chunk => {
+            body += chunk;
+        });
+
+        req.on('end', () => {
             try {
-                setCacheData(dbName, key, value, ttl);
-                res.statusCode = 200;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ message: 'Cache set successfully!' }));
+                const { key, value, ttl } = JSON.parse(body);
+
+                if (key && value && ttl) {
+                    setCacheData(dbName, key, value, ttl);
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ message: 'Cache set successfully!' }));
+                } else {
+                    res.statusCode = 400;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ message: 'Missing required parameters: key, value, ttl' }));
+                }
             } catch (error) {
-                res.statusCode = 500;
+                res.statusCode = 400;
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ message: 'Internal Server Error' }));
+                res.end(JSON.stringify({ message: 'Invalid JSON format' }));
             }
-        } else {
-            res.statusCode = 400;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ message: 'Missing required parameters: key, value, ttl' }));
-        }
+        });
     } else if (action === 'get' && method === 'GET') {
-        const urlParams = new URLSearchParams(parsedUrl.search);
-        const key = urlParams.get('key');
+        const key = parsedUrl.searchParams.get('key');
 
         if (key) {
             try {
