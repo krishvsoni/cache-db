@@ -27,17 +27,25 @@ const setCacheData = (db, key, value, ttl) => {
 
 const getCacheData = (db, key) => {
     try {
-        return cacheDB.getCache(`${db}:${key}`);
+        const value = cacheDB.getCache(`${db}:${key}`);
+        logger.info(`Cache value for ${db}:${key}: ${JSON.stringify(value)}`);
+        
+        if (!value) {
+            logger.warn(`No value found for key ${key} in database ${db}`);
+        }
+        
+        return value;
     } catch (error) {
         logger.error(`Error getting cache for ${db}:${key} - ${error.message}`);
         throw error;
     }
 };
 
+
 const server = http.createServer((req, res) => {
     const { method, url } = req;
     const parsedUrl = new URL(url, `http://${req.headers.host}`);
-    const pathname = parsedUrl.pathname.split('/').filter(Boolean);
+    const pathname = parsedUrl.pathname.split('/').filter(Boolean); // Ensure the path is split correctly
 
     logger.info(`Request URL: ${url}`);
     logger.info(`Parsed pathname: ${pathname}`);
@@ -84,9 +92,16 @@ const server = http.createServer((req, res) => {
         if (key) {
             try {
                 const value = getCacheData(dbName, key);
-                res.statusCode = 200;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ key, value }));
+
+                if (value === undefined || value === null) {
+                    res.statusCode = 404;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ message: 'Key not found' }));
+                } else {
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ key, value }));
+                }
             } catch (error) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
