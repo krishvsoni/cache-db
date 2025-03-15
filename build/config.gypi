@@ -12,7 +12,7 @@
         "variables": {}
       }
     },
-    "default_configuration": "Release",
+    "default_configuration": "Debug",
     "defines": [],
     "include_dirs": [],
     "libraries": [],

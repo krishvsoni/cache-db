@@ -15,9 +15,10 @@ const logger = winston.createLogger({
     ]
 });
 
-const setCacheData = (db, key, value, ttl) => {
+const setCacheData = (db, key, value, ttl, persistenceOption = null) => {
     try {
-        cacheDB.setCache(`${db}:${key}`, value, ttl);
+        logger.info(`Setting cache for ${db}:${key} with TTL: ${ttl} and Persistence: ${persistenceOption}`);
+        cacheDB.setCache(`${db}:${key}`, value, ttl, persistenceOption);
         logger.info(`Cache set for ${db}:${key}`);
     } catch (error) {
         logger.error(`Error setting cache for ${db}:${key} - ${error.message}`);
@@ -25,15 +26,14 @@ const setCacheData = (db, key, value, ttl) => {
     }
 };
 
-const getCacheData = (db, key) => {
+const getCacheData = (db, key, query = null) => {
     try {
-        const value = cacheDB.getCache(`${db}:${key}`);
-        logger.info(`Cache value for ${db}:${key}: ${JSON.stringify(value)}`);
-        
-        if (!value) {
-            logger.warn(`No value found for key ${key} in database ${db}`);
+        logger.info(`Getting cache for ${db}:${key} with query: ${query}`);
+        const value = cacheDB.getCache(`${db}:${key}`, query);
+        logger.info(`Cache value for ${db}:${key}: ${value}`);
+        if (value === "Key has expired" || value === "Key not found") {
+            logger.warn(`Cache miss for ${db}:${key}`);
         }
-        
         return value;
     } catch (error) {
         logger.error(`Error getting cache for ${db}:${key} - ${error.message}`);
@@ -41,11 +41,10 @@ const getCacheData = (db, key) => {
     }
 };
 
-
 const server = http.createServer((req, res) => {
     const { method, url } = req;
     const parsedUrl = new URL(url, `http://${req.headers.host}`);
-    const pathname = parsedUrl.pathname.split('/').filter(Boolean); // Ensure the path is split correctly
+    const pathname = parsedUrl.pathname.split('/').filter(Boolean);
 
     logger.info(`Request URL: ${url}`);
     logger.info(`Parsed pathname: ${pathname}`);
@@ -61,17 +60,15 @@ const server = http.createServer((req, res) => {
 
     if (action === 'set' && method === 'POST') {
         let body = '';
-
         req.on('data', chunk => {
             body += chunk;
         });
 
         req.on('end', () => {
             try {
-                const { key, value, ttl } = JSON.parse(body);
-
+                const { key, value, ttl, persistence } = JSON.parse(body);
                 if (key && value && ttl) {
-                    setCacheData(dbName, key, value, ttl);
+                    setCacheData(dbName, key, value, ttl, persistence);
                     res.statusCode = 200;
                     res.setHeader('Content-Type', 'application/json');
                     res.end(JSON.stringify({ message: 'Cache set successfully!' }));
@@ -88,15 +85,15 @@ const server = http.createServer((req, res) => {
         });
     } else if (action === 'get' && method === 'GET') {
         const key = parsedUrl.searchParams.get('key');
+        const query = parsedUrl.searchParams.get('query');
 
         if (key) {
             try {
-                const value = getCacheData(dbName, key);
-
-                if (value === undefined || value === null) {
+                const value = getCacheData(dbName, key, query);
+                if (value === "Key has expired" || value === "Key not found") {
                     res.statusCode = 404;
                     res.setHeader('Content-Type', 'application/json');
-                    res.end(JSON.stringify({ message: 'Key not found' }));
+                    res.end(JSON.stringify({ message: value }));
                 } else {
                     res.statusCode = 200;
                     res.setHeader('Content-Type', 'application/json');

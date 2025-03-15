@@ -5,29 +5,42 @@
 #include <mutex>
 #include <chrono>
 #include <thread>
+#include <fstream>
+#include <atomic>
 
 class Cache {
 public:
     struct CacheEntry {
         std::string value;
         std::chrono::time_point<std::chrono::system_clock> expiry_time;
-
         CacheEntry() : value(""), expiry_time(std::chrono::system_clock::now()) {}
         CacheEntry(std::string val, int ttl) : value(val) {
             expiry_time = std::chrono::system_clock::now() + std::chrono::seconds(ttl);
         }
-
         bool isExpired() const {
             return std::chrono::system_clock::now() > expiry_time;
         }
     };
 
     std::unordered_map<std::string, CacheEntry> cache_map;
-    std::mutex mtx; 
+    std::mutex mtx;
+    std::atomic<size_t> memory_usage;
+    size_t max_memory = 50 * 1024 * 1024; // 50 MB memory limit for example
+
+    Cache() : memory_usage(0) {}
 
     void set(const std::string& key, const std::string& value, int ttl = 0) {
         std::lock_guard<std::mutex> lock(mtx);
+        size_t size = key.size() + value.size();
+        memory_usage += size;
+
+        // Evict if memory limit is exceeded
+        if (memory_usage > max_memory) {
+            evict();
+        }
+
         cache_map[key] = CacheEntry(value, ttl);
+        persistData();
     }
 
     std::string get(const std::string& key) {
@@ -47,10 +60,9 @@ public:
         std::lock_guard<std::mutex> lock(mtx);
         auto it = cache_map.find(key);
         if (it != cache_map.end()) {
+            memory_usage -= (it->first.size() + it->second.value.size());
             cache_map.erase(it);
-            std::cout << "Key " << key << " deleted." << std::endl;
-        } else {
-            std::cout << "Key not found." << std::endl;
+            persistData();
         }
     }
 
@@ -58,6 +70,31 @@ public:
         std::lock_guard<std::mutex> lock(mtx);
         auto it = cache_map.find(key);
         return it != cache_map.end() && !it->second.isExpired();
+    }
+
+    // Eviction policy: Remove the first element (can be improved with more complex algorithms)
+    void evict() {
+        if (cache_map.empty()) return;
+        auto it = cache_map.begin();
+        memory_usage -= (it->first.size() + it->second.value.size());
+        cache_map.erase(it);
+    }
+
+    void persistData() {
+        std::ofstream file("cache_persistence.txt", std::ios::app);
+        if (file.is_open()) {
+            for (const auto& [key, entry] : cache_map) {
+                file << key << ":" << entry.value << "\n";
+            }
+        }
+    }
+
+    void loadFromFile() {
+        std::ifstream file("cache_persistence.txt");
+        std::string key, value;
+        while (std::getline(file, key, ':') && std::getline(file, value)) {
+            cache_map[key] = CacheEntry(value, 0);
+        }
     }
 };
 

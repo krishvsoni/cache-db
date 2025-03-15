@@ -1,0 +1,74 @@
+Justification for All Changes Made
+1. C++ Code (Cache Class)
+We made several key updates in the C++ Cache class implementation to align it with the requested Redis-like features and improve the overall functionality of your in-memory cache. Below are the justifications for each change:
+
+Memory Limitations (Eviction) and TTL:
+
+TTL (Time-To-Live) Handling: The CacheEntry struct was updated to support a TTL feature. This means that each cache entry is assigned a time-to-live value, and if the cache entry expires, it is automatically removed from the cache.
+Eviction: In the get function, an expired entry is removed from the cache, simulating the eviction process (based on TTL). When an entry is fetched, the system checks if the entry is expired, and if so, removes it.
+Justification: TTL handling and eviction policies are crucial for controlling memory usage. By managing TTL and evicting expired data, we ensure the cache doesn't grow indefinitely and consume excessive memory, addressing the memory limitation issue mentioned in your requirements.
+Concurrency (Thread Safety):
+
+Mutex Locking: A std::mutex was added to ensure thread safety when accessing the cache. This ensures that multiple threads can safely interact with the cache without causing data races or corruption.
+Justification: Redis operates in a highly concurrent environment, and to ensure that your system behaves safely under concurrent access, the mutex helps to avoid race conditions while reading and writing cache entries.
+Persistence Handling (Not Implemented Here):
+
+Explanation: While Redis supports persistence options (RDB, AOF), your C++ implementation doesn't handle persistence mechanisms. This was left out because your code seems focused on in-memory operations for now.
+Justification: Given that persistence introduces overheads and complexities, it's often considered an optional feature depending on the use case. The primary focus here was on implementing efficient in-memory cache management with TTL support.
+2. Node.js API (Express and Axios Handling)
+In the Node.js API, the following changes were made to facilitate cache set/get operations using the C++ Cache class:
+
+Endpoints for Cache Operations:
+
+/set Endpoint: Handles the setting of data into the cache, where it receives the cache data (key, value, ttl), sets it in the cache, and returns a success response.
+/get Endpoint: Handles the fetching of data from the cache, where it retrieves the data by the provided key and returns the value if found, or an error message if not found or expired.
+Justification: The endpoints mirror Redis-like functionality, where you can set and get cache data. The /set endpoint corresponds to SET in Redis, and the /get endpoint corresponds to GET in Redis, making this API intuitive and simple to use.
+Database-Specific Keys:
+
+Dynamic Database Handling: The dbName was passed in the URL path, ensuring that cache operations are specific to different databases. Each database has its own namespace for keys.
+Justification: This allows you to scale your cache across different "databases", giving you flexibility to store and manage different datasets independently, similar to Redis' database isolation with different indexes.
+Error Handling:
+
+Error Responses: The API responds with appropriate status codes (404, 400, 500) and JSON error messages when invalid data is provided (e.g., missing parameters, expired cache, etc.).
+Justification: Proper error handling ensures that users receive meaningful responses and can easily debug issues. The error handling also ensures that the server doesn’t crash unexpectedly, improving stability and robustness.
+Logging:
+
+Logging with Winston: A logging mechanism was added using the winston library to log the operations, including cache sets, gets, errors, and other activities.
+Justification: Logging helps in tracking the behavior of the application, debugging, and monitoring performance. It is an essential tool when scaling systems, especially for diagnosing issues during performance testing or real-world usage.
+3. Test Script (Load Test Using Axios)
+In the test script, several modifications were made to simulate load testing on the cache server and measure the performance and efficiency of cache set and get operations:
+
+Randomized Cache Operations:
+
+The test script randomly decides whether to set or get cache data for each request. It simulates a real-world scenario where cache entries are both inserted and fetched.
+Justification: By randomly alternating between SET and GET operations, the load test mimics real-world usage patterns and ensures that the cache performs well under both write and read conditions.
+Generating Random Task Data:
+
+The script generates random task data, including a unique task_id, title, status, and other fields. This makes the test data varied and reflects actual use cases.
+Justification: Generating realistic, random data ensures the load test mimics real-world conditions and helps identify potential bottlenecks in both the cache server and the API server.
+Performance Metrics:
+
+Request Metrics: The script logs the number of successful and failed requests, along with the total number of requests sent and the average number of requests per second (RPS).
+Justification: By capturing performance metrics, the script provides valuable insight into the system's scalability and responsiveness. This data can be used to identify performance bottlenecks, tune the system, and ensure it can handle high traffic.
+Delay Between Requests:
+
+A delay between requests was added to simulate more realistic load and avoid overwhelming the server too quickly.
+Justification: A delay between requests allows the server to handle requests at a manageable rate. This is important in real-world scenarios where clients make requests at different intervals, ensuring that the test mimics realistic traffic patterns.
+UUID Generation for Keys:
+
+Each cache entry uses a unique task_id generated via a UUID function. This ensures that each cache entry is unique and avoids clashes during the test.
+Justification: Using unique keys ensures that each test request is independent, reducing the likelihood of cache collisions and providing accurate results for both read and write operations.
+Summary of Justifications:
+C++ Changes:
+
+Implemented TTL (Time-to-Live) for cache entries to simulate Redis eviction behavior and prevent memory issues by removing expired entries.
+Added thread safety with a std::mutex to ensure that concurrent cache operations don’t result in data races.
+No persistence implemented, as it's optional and introduces complexity and overhead not required for the current load testing and in-memory cache purposes.
+Node.js API Changes:
+
+Added cache set/get endpoints with db-specific cache handling and proper error responses, emulating Redis-like behavior.
+Logging was integrated for better traceability and debugging.
+Test Script Changes:
+
+Implemented randomized cache operations (set and get) with random task data generation for realistic load testing.
+Added performance metrics to track request success rates and system performance under load, including RPS calculations for system scalability insights.
