@@ -3,6 +3,7 @@ const { URL } = require('url');
 const cacheDB = require('./Release/cache_db.node');
 const winston = require('winston');
 
+// Logger setup
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.combine(
@@ -15,6 +16,7 @@ const logger = winston.createLogger({
     ]
 });
 
+// Function to set cache data with TTL and persistence options
 const setCacheData = (db, key, value, ttl, persistenceOption = null) => {
     try {
         logger.info(`Setting cache for ${db}:${key} with TTL: ${ttl} and Persistence: ${persistenceOption}`);
@@ -26,6 +28,7 @@ const setCacheData = (db, key, value, ttl, persistenceOption = null) => {
     }
 };
 
+// Function to get cache data
 const getCacheData = (db, key, query = null) => {
     try {
         logger.info(`Getting cache for ${db}:${key} with query: ${query}`);
@@ -41,6 +44,21 @@ const getCacheData = (db, key, query = null) => {
     }
 };
 
+// Function to initialize a database and return the user's API URL
+const initializeDbAndReturnUrl = (userName, userEmail, dbName) => {
+    try {
+        // Simulate DB initialization
+        logger.info(`Initializing database for ${userName} (${userEmail}) with database name ${dbName}`);
+        
+        // Generate a URL for the user to use in their backend for caching
+        const apiUrl = `http://localhost:3000/${dbName}/`;
+        return apiUrl;
+    } catch (error) {
+        logger.error(`Error initializing DB for ${userName} - ${error.message}`);
+        throw error;
+    }
+};
+
 const server = http.createServer((req, res) => {
     const { method, url } = req;
     const parsedUrl = new URL(url, `http://${req.headers.host}`);
@@ -49,16 +67,40 @@ const server = http.createServer((req, res) => {
     logger.info(`Request URL: ${url}`);
     logger.info(`Parsed pathname: ${pathname}`);
 
-    if (pathname.length < 1) {
-        res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        return res.end(JSON.stringify({ message: 'Database name is required in the URL path' }));
+    // Endpoint to initialize a new DB
+    if (pathname.length === 1 && pathname[0] === 'initialize' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk;
+        });
+
+        req.on('end', () => {
+            try {
+                const { name, email, dbName } = JSON.parse(body);
+                if (name && email && dbName) {
+                    // Initialize the database and get the API URL
+                    const apiUrl = initializeDbAndReturnUrl(name, email, dbName);
+
+                    // Respond with the API URL
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ message: 'Database initialized successfully!', apiUrl }));
+                } else {
+                    res.statusCode = 400;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ message: 'Missing required parameters: name, email, dbName' }));
+                }
+            } catch (error) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ message: 'Invalid JSON format' }));
+            }
+        });
     }
 
-    const dbName = pathname[0];
-    const action = pathname[1];
-
-    if (action === 'set' && method === 'POST') {
+    // Endpoint for adding data to the cache (e.g., /dbName/set)
+    else if (pathname.length === 2 && pathname[1] === 'set' && method === 'POST') {
+        const dbName = pathname[0];
         let body = '';
         req.on('data', chunk => {
             body += chunk;
@@ -67,11 +109,15 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const { key, value, ttl, persistence } = JSON.parse(body);
+
                 if (key && value && ttl) {
+                    // Store the data in the cache with the specified TTL
                     setCacheData(dbName, key, value, ttl, persistence);
+
+                    // Return success message
                     res.statusCode = 200;
                     res.setHeader('Content-Type', 'application/json');
-                    res.end(JSON.stringify({ message: 'Cache set successfully!' }));
+                    res.end(JSON.stringify({ message: `Data stored successfully in ${dbName} for key ${key}` }));
                 } else {
                     res.statusCode = 400;
                     res.setHeader('Content-Type', 'application/json');
@@ -83,7 +129,11 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({ message: 'Invalid JSON format' }));
             }
         });
-    } else if (action === 'get' && method === 'GET') {
+    }
+
+    // Endpoint for getting data from the cache (e.g., /dbName/get)
+    else if (pathname.length === 2 && pathname[1] === 'get' && method === 'GET') {
+        const dbName = pathname[0];
         const key = parsedUrl.searchParams.get('key');
         const query = parsedUrl.searchParams.get('query');
 
@@ -109,7 +159,15 @@ const server = http.createServer((req, res) => {
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ message: 'Key is required' }));
         }
-    } else {
+    }
+
+    else if (pathname.length < 1) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ message: 'Database name is required in the URL path' }));
+    }
+
+    else {
         res.statusCode = 404;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ message: 'Not Found' }));

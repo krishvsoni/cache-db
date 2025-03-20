@@ -36,6 +36,21 @@ function generateRandomTaskData() {
     };
 }
 
+async function initializeDatabase(name, email, dbName) {
+    try {
+        const response = await axios.post(`${baseURL}/initialize`, {
+            name,
+            email,
+            dbName
+        });
+        console.log(`Database initialized for ${dbName}:`, response.data.apiUrl);
+        return response.data.apiUrl;
+    } catch (error) {
+        console.error(`Error initializing database: ${error.message}`);
+        throw error;
+    }
+}
+
 async function setCacheData(taskData) {
     try {
         const response = await axios.post(`${baseURL}/${dbName}/set`, taskData, {
@@ -69,6 +84,13 @@ async function getCacheData(taskKey) {
 async function testLoad() {
     startTime = Date.now();
     console.log(`Starting performance test: Sending ${requestCount} requests...`);
+
+    try {
+        await initializeDatabase('Test User', 'test.user@example.com', dbName);
+    } catch (error) {
+        console.error('Failed to initialize the database. Aborting test.');
+        return;
+    }
 
     for (let i = 0; i < requestCount; i++) {
         totalRequests++;
