@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js",
-    "test":"node query.test.js"
+    "test": "node query.test.js",
+    "start": "node index.js"
   },
   "author": "",
   "license": "ISC",
@@ -13,6 +12,7 @@
   "dependencies": {
     "axios": "^1.8.3",
     "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
     "faker": "^6.6.6",
     "nan": "^2.22.2",
     "node-gyp": "^11.1.0",
