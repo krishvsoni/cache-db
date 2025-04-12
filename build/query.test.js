@@ -1,3 +1,8 @@
+/*
+author: Krish Soni
+this file is used to test the performance of the workflow service locally.
+*/
+
 const axios = require('axios');
 
 const baseURL = 'http://localhost:3000';
@@ -33,6 +38,7 @@ function generateRandomTaskData() {
             }],
         }),
         ttl: 3600,
+        persistence: true, 
     };
 }
 
@@ -92,22 +98,27 @@ async function testLoad() {
         return;
     }
 
+    const promises = [];
     for (let i = 0; i < requestCount; i++) {
         totalRequests++;
         const taskData = generateRandomTaskData();
 
-        if (Math.random() > 0.5) {
-            await setCacheData(taskData);
-        } else {
-            await getCacheData(taskData.key);
-        }
+        const requestPromise = (Math.random() > 0.5)
+            ? setCacheData(taskData) 
+            : getCacheData(taskData.key); 
+
+        promises.push(requestPromise); 
 
         if (i % 100 === 0) {
             console.log(`Progress: ${i} requests sent.`);
         }
 
-        await new Promise(resolve => setTimeout(resolve, delay));
+        if (i % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
     }
+
+    await Promise.all(promises);
 
     const endTime = Date.now();
     const elapsedTime = (endTime - startTime) / 1000;

@@ -21,7 +21,7 @@ const logger = winston.createLogger({
 const setCacheData = (db, key, value, ttl, persistenceOption = null) => {
     try {
         logger.info(`Setting cache for ${db}:${key} with TTL: ${ttl} and Persistence: ${persistenceOption}`);
-        cacheDB.setCache(`${db}:${key}`, value, ttl, persistenceOption);
+        cacheDB.setCache(`${db}:${key}`, value, ttl, persistenceOption); 
         logger.info(`Cache set for ${db}:${key}`);
     } catch (error) {
         logger.error(`Error setting cache for ${db}:${key} - ${error.message}`);
@@ -102,7 +102,7 @@ const server = http.createServer((req, res) => {
                 try {
                     const { key, value, ttl, persistence } = JSON.parse(body);
                     if (key && value && ttl) {
-                        setCacheData(dbName, key, value, ttl, persistence);
+                        setCacheData(dbName, key, value, ttl, persistence); 
                         res.statusCode = 200;
                         res.setHeader('Content-Type', 'application/json');
                         res.end(JSON.stringify({ message: `Data stored successfully in ${dbName} for key ${key}` }));

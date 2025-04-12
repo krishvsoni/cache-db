@@ -7,6 +7,9 @@
 #include <thread>
 #include <fstream>
 #include <atomic>
+#include <functional>
+#include <vector>
+#include <algorithm>
 
 class Cache {
 public:
@@ -25,22 +28,51 @@ public:
     std::unordered_map<std::string, CacheEntry> cache_map;
     std::mutex mtx;
     std::atomic<size_t> memory_usage;
-    size_t max_memory = 50 * 1024 * 1024; // 50 MB memory limit for example
+    size_t max_memory = 50 * 1024 * 1024;
+    std::vector<std::thread> threads;
 
     Cache() : memory_usage(0) {}
 
-    void set(const std::string& key, const std::string& value, int ttl = 0) {
+    void setAsync(const std::string& key, const std::string& value, int ttl = 0) {
+        threads.push_back(std::thread([this, key, value, ttl]() {
+            std::lock_guard<std::mutex> lock(mtx);
+            size_t size = key.size() + value.size();
+            memory_usage += size;
+
+            if (memory_usage > max_memory) {
+                evict();
+            }
+
+            cache_map[key] = CacheEntry(value, ttl);
+            persistData();
+        }));
+    }
+
+    void runInParallel(std::function<void()> task) {
+        threads.push_back(std::thread(task));
+    }
+
+    std::vector<std::string> rangeQueryByValueLength(size_t min_length) {
         std::lock_guard<std::mutex> lock(mtx);
-        size_t size = key.size() + value.size();
-        memory_usage += size;
-
-        // Evict if memory limit is exceeded
-        if (memory_usage > max_memory) {
-            evict();
+        std::vector<std::string> result;
+        for (const auto& [key, entry] : cache_map) {
+            if (entry.value.size() >= min_length) {
+                result.push_back(key);
+            }
         }
+        return result;
+    }
 
-        cache_map[key] = CacheEntry(value, ttl);
-        persistData();
+    std::vector<std::string> queryByTTL(int ttl_threshold) {
+        std::lock_guard<std::mutex> lock(mtx);
+        std::vector<std::string> result;
+        for (const auto& [key, entry] : cache_map) {
+            int ttl = std::chrono::duration_cast<std::chrono::seconds>(entry.expiry_time - std::chrono::system_clock::now()).count();
+            if (ttl >= ttl_threshold) {
+                result.push_back(key);
+            }
+        }
+        return result;
     }
 
     std::string get(const std::string& key) {
@@ -72,7 +104,6 @@ public:
         return it != cache_map.end() && !it->second.isExpired();
     }
 
-    // Eviction policy: Remove the first element (can be improved with more complex algorithms)
     void evict() {
         if (cache_map.empty()) return;
         auto it = cache_map.begin();
@@ -95,6 +126,15 @@ public:
         while (std::getline(file, key, ':') && std::getline(file, value)) {
             cache_map[key] = CacheEntry(value, 0);
         }
+    }
+
+    void waitForAllThreads() {
+        for (auto& thread : threads) {
+            if (thread.joinable()) {
+                thread.join();
+            }
+        }
+        threads.clear();
     }
 };
 
@@ -120,7 +160,7 @@ napi_value SetCache(napi_env env, napi_callback_info info) {
     status = napi_get_value_int32(env, args[2], &ttl);
     if (status != napi_ok) return nullptr;
 
-    cache.set(key, value, ttl);
+    cache.setAsync(key, value, ttl);
 
     napi_value result;
     status = napi_create_string_utf8(env, "Success", NAPI_AUTO_LENGTH, &result);
